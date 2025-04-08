@@ -87,15 +87,14 @@ RANGE-ALIST is expected to be of the form:
   (push-mark (point) t t)
   (md-babel--move-point (alist-get 'to range-alist)))
 
-(defun md-babel--move-point (location-alist &OPTIONAL buffer)
+(defun md-babel--move-point (location-alist &optional buffer)
   "Move point in BUFFER to absolute location from LOCATION-ALIST.
 
 LOCATION-ALIST is expected to be of the form:
 
     ((line . LINE) (column . COLUMN))
 
-Uses current buffer if BUFFER is nil.
-"
+Uses current buffer if BUFFER is nil."
   (with-current-buffer (or buffer (current-buffer))
     (goto-char (point-min))
     (beginning-of-line (alist-get 'line location-alist))
