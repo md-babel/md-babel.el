@@ -4,7 +4,7 @@
 
 ;; Author: Christian Tietze <post@christiantietze.de>
 ;; Version: 0.1
-;; Package-Requires: ((markdown-mode "2.0"))
+;; Package-Requires: ((markdown-mode "2.0") (emacs "27.1"))
 ;; Keywords: Markdown
 ;; URL: https://md-babel.org/
 
@@ -26,14 +26,16 @@
 ;;; Commentary:
 
 ;; This package provides functionality to execute code blocks in
-;; Markdown documents.
+;; Markdown documents via the `md-babel' executable.
+;;
+;; Set `md-babel-path' (until auto-discovery is implemented).
 
 
 ;;; Code:
 
 (defvar md-babel-path
-  "/Users/ctm/Coding/_components/MarkdownBlockRenderer/.build/debug/md-babel"
-  "Path to the `md-babel' executable.")
+  nil
+  "Path to your `md-babel' executable.")
 
 (defun md-babel--source-location-at-point ()
   "Returns the cmark-compatible source location of point, 1-based."
@@ -72,32 +74,48 @@
       )))
 
 (defun md-babel--mark-range (range-alist)
+  "Mark range from RANGE-ALIST in current buffer.
+
+RANGE-ALIST is expected to be of the form:
+
+    (from ((line . FROM-LINE) (column . FROM-COLUMN))
+     to ((line . TO-LINE) (column . TO-COLUMN)))
+"
   (md-babel--move-point (alist-get 'from range-alist))
   (push-mark (point) t t)
   (md-babel--move-point (alist-get 'to range-alist)))
 
-(defun md-babel--move-point (location-alist)
-  (goto-char (point-min))
-  (beginning-of-line (alist-get 'line location-alist))
-  (move-to-column (- (alist-get 'column location-alist) 1)))
+(defun md-babel--move-point (location-alist &OPTIONAL buffer)
+  "Move point in BUFFER to absolute location from LOCATION-ALIST.
+
+LOCATION-ALIST is expected to be of the form:
+
+    ((line . LINE) (column . COLUMN))
+
+Uses current buffer if BUFFER is nil.
+"
+  (with-current-buffer (or buffer (current-buffer))
+    (goto-char (point-min))
+    (beginning-of-line (alist-get 'line location-alist))
+    (move-to-column (- (alist-get 'column location-alist) 1))))
 
 (defun md-babel--execute (file location)
+  "Instructs md-babel to execute block at LOCATION in FILE.
+
+Returns the alist form of the JSON response.
+
+The program’s JSON response is inserted into a buffer with the name
+`md-babel--result-buffer-name', which see."
   (let* ((command (md-babel--execute-command file location))
          (json-str (with-temp-buffer
                      (shell-command command (current-buffer) nil)
                      (buffer-substring-no-properties (point-min) (point-max))
-                     )))
-    (with-current-buffer (get-buffer-create
-                          md-babel--result-buffer-name)
+                     ))
+         (result-buffer (get-buffer-create md-babel--result-buffer-name)))
+    (with-current-buffer result-buffer
       (delete-region (point-min) (point-max))
       (insert json-str))
     (json-parse-string json-str :object-type 'alist)))
-
-(defun md-babel--alist-from-json-result (json-str)
-  (let ((json-data (json-parse-string json-str :object-type 'alist)))
-    (maphash (lambda (key value)
-               (cons (intern key) value))
-             json-data)))
 
 
 ;;;###autoload
