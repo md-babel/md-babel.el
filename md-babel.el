@@ -46,6 +46,8 @@
 (defun md-babel--source-location-column (location)
   (cdr location))
 
+(defvar md-babel--result-buffer-name "*md-babel-result*")
+
 ;; swift run md-babel exec --file test.txt --line 7 --column 1
 (defun md-babel--execute-command (file location)
   "Assembles the shell invocation to execute FILE at LOCATION."
@@ -57,10 +59,6 @@
         "--line" (md-babel--source-location-line location)
         "--column" (md-babel--source-location-column location))
    " "))
-
-(defvar md-babel-result nil)
-
-(alist-get 'column (alist-get 'from (alist-get 'replacementRange md-babel-result)))
 
 (defun md-babel-execute-block-at-point ()
   (interactive)
@@ -88,10 +86,12 @@
          (json-str (with-temp-buffer
                      (shell-command command (current-buffer) nil)
                      (buffer-substring-no-properties (point-min) (point-max))
-                     ))
-         (result (json-parse-string json-str :object-type 'alist)))
-    result
-    ))
+                     )))
+    (with-current-buffer (get-buffer-create
+                          md-babel--result-buffer-name)
+      (delete-region (point-min) (point-max))
+      (insert json-str))
+    (json-parse-string json-str :object-type 'alist)))
 
 (defun md-babel--alist-from-json-result (json-str)
   (let ((json-data (json-parse-string json-str :object-type 'alist)))
