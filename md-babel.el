@@ -3,7 +3,7 @@
 ;; Copyright (C) 2025 Christian Tietze
 
 ;; Author: Christian Tietze <post@christiantietze.de>
-;; Version: 0.1
+;; Version: 0.1.1
 ;; Package-Requires: ((markdown-mode "2.0") (emacs "27.1"))
 ;; Keywords: Markdown
 ;; URL: https://md-babel.org/
