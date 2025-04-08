@@ -64,6 +64,8 @@
 
 (defun md-babel-execute-block-at-point ()
   (interactive)
+  (when (buffer-modified-p (current-buffer))
+    (error "Save first (to avoid surprises): md-babel operates on files, not buffer contents"))
   (when-let* ((location (md-babel--source-location-at-point))
               (file (buffer-file-name))
               (result (md-babel--execute file location)))
