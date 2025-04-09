@@ -96,14 +96,16 @@ Uses current buffer if BUFFER is nil."
 
 (defun md-babel--execute-file-command (file location)
   "Assembles the shell invocation to execute FILE at LOCATION."
-  (mapconcat
-   (lambda (p) (format "%s" p))
-   (list md-babel-path
-         "exec"
-         "--file" (format "\"%s\"" file)
-         "--line" (md-babel--source-location-line location)
-         "--column" (md-babel--source-location-column location))
-   " "))
+  (let ((line (number-to-string (md-babel--source-location-line location)))
+        (column (number-to-string (md-babel--source-location-column
+                                   location))))
+    (string-join
+     (list md-babel-path
+           "exec"
+           "--file" (shell-quote-argument file)
+           "--line" (shell-quote-argument line)
+           "--column" (shell-quote-argument column))
+     " ")))
 
 (defun md-babel--execute-file (file location)
   "Instructs md-babel to execute block at LOCATION in FILE.
