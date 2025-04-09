@@ -49,13 +49,17 @@
 ;;;; Data types
 ;;;;; cmark's source location and source range
 
-(defun md-babel--source-location-at-point ()
-  "Returns the cmark-compatible source location of point, 1-based.
+(defun md-babel--source-location-at-point (&optional buffer)
+  "The cmark-compatible source location of `point' in BUFFER, 1-based.
 
-A source location is the cons of line and column."
-  (let ((line (line-number-at-pos))
-        (column (current-column)))
-    (cons line (+ 1 column))))
+A source location is the cons of 1-based line and column.
+
+Uses the current buffer if BUFFER is nil."
+  (let ((buffer (or buffer (current-buffer))))
+    (with-current-buffer buffer
+      (let ((line (line-number-at-pos))
+            (column (current-column)))
+        (cons line (+ 1 column))))))
 
 (defun md-babel--source-location-line (location)
   (car location))
@@ -64,18 +68,6 @@ A source location is the cons of line and column."
 
 
 ;;;; Interpret responses
-
-(defun md-babel--mark-range (range-alist)
-  "Mark range from RANGE-ALIST in current buffer.
-
-RANGE-ALIST is expected to be of the form:
-
-    (from ((line . FROM-LINE) (column . FROM-COLUMN))
-     to ((line . TO-LINE) (column . TO-COLUMN)))
-"
-  (md-babel--move-point (alist-get 'from range-alist))
-  (push-mark (point) t t)
-  (md-babel--move-point (alist-get 'to range-alist)))
 
 (defun md-babel--move-point (location-alist &optional buffer)
   "Move point in BUFFER to absolute location from LOCATION-ALIST.
@@ -90,11 +82,70 @@ Uses current buffer if BUFFER is nil."
     (beginning-of-line (alist-get 'line location-alist))
     (move-to-column (- (alist-get 'column location-alist) 1))))
 
+(defun md-babel--mark-range (range-alist)
+  "Mark range from RANGE-ALIST in current buffer.
+
+RANGE-ALIST is expected to be of the form:
+
+    (from ((line . FROM-LINE) (column . FROM-COLUMN))
+     to ((line . TO-LINE) (column . TO-COLUMN)))
+"
+  (md-babel--move-point (alist-get 'from range-alist))
+  (push-mark (point) t t)
+  (md-babel--move-point (alist-get 'to range-alist)))
+
+(defun md-babel--interpret-response (response)
+  (save-excursion
+    (md-babel--mark-range (alist-get 'replacementRange response))
+    (call-interactively #'delete-region)
+    (insert (alist-get 'replacementString response))))
+
+
+;;;; Buffer content-based invocation
+
+(defun md-babel--make-execute-stdin-command (location)
+  "Assembles the invocation process standard input to execute LOCATION."
+  (let ((line (number-to-string (md-babel--source-location-line location)))
+        (column (number-to-string (md-babel--source-location-column
+                                   location))))
+    (string-join
+     (list md-babel-path
+           "exec"
+           "--line" (shell-quote-argument line)
+           "--column" (shell-quote-argument column))
+     " ")))
+
+(defun md-babel--execute-buffer (location &optional buffer)
+  "Instructs md-babel to execute block at LOCATION in BUFFER.
+
+Uses the current buffer if BUFFER is nil.
+
+Returns the alist form of the JSON response.
+
+The program’s JSON response is inserted into a buffer with the name
+`md-babel-response-buffer-name', which see."
+  (let ((buffer (or buffer (current-buffer)))
+        (command (md-babel--make-execute-stdin-command location))
+        (response-buffer (get-buffer-create
+                          md-babel-response-buffer-name)))
+    (with-current-buffer response-buffer
+      (erase-buffer))
+    (with-current-buffer buffer
+      (call-shell-region (point-min) (point-max) command nil response-buffer))
+    (let ((json-str (with-current-buffer response-buffer
+                      (buffer-substring-no-properties (point-min) (point-max)))))
+      (json-parse-string json-str :object-type 'alist))))
+
+(defun md-babel--replace-response-buffer-content (string)
+  "Replaces contents of buffer `md-babel-response-buffer-name' with STRING."
+  (with-current-buffer (get-buffer-create md-babel-response-buffer-name)
+    (erase-buffer)
+    (insert string)))
 
 
 ;;;; File-based invocation
 
-(defun md-babel--execute-file-command (file location)
+(defun md-babel--make-execute-file-command (file location)
   "Assembles the shell invocation to execute FILE at LOCATION."
   (let ((line (number-to-string (md-babel--source-location-line location)))
         (column (number-to-string (md-babel--source-location-column
@@ -114,7 +165,7 @@ Returns the alist form of the JSON response.
 
 The program’s JSON response is inserted into a buffer with the name
 `md-babel-response-buffer-name', which see."
-  (let* ((command (md-babel--execute-file-command file location))
+  (let* ((command (md-babel--make-execute-file-command file location))
          (json-str (with-temp-buffer
                      (shell-command command (current-buffer) nil)
                      (buffer-substring-no-properties (point-min) (point-max))
@@ -127,14 +178,6 @@ The program’s JSON response is inserted into a buffer with the name
 
 
 ;;; User-facing commands
-
-
-(defun md-babel--interpret-response (response)
-  (save-excursion
-    (md-babel--mark-range (alist-get 'replacementRange response))
-    (call-interactively #'delete-region)
-    (insert (alist-get 'replacementString response))
-    ))
 
 ;;;###autoload
 (defun md-babel-execute-block-at-point ()
@@ -151,11 +194,8 @@ to get there:
 This command automatically interprets the response.
 "
   (interactive)
-  (when (buffer-modified-p (current-buffer))
-    (error "Save first (to avoid surprises): md-babel operates on files, not buffer contents"))
   (when-let* ((location (md-babel--source-location-at-point))
-              (file (buffer-file-name))
-              (response (md-babel--execute-file file location)))
+              (response (md-babel--execute-buffer location)))
     (md-babel--interpret-response response)))
 
 (provide 'md-babel)
