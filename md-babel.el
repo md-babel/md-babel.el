@@ -3,7 +3,7 @@
 ;; Copyright (C) 2025 Christian Tietze
 
 ;; Author: Christian Tietze <post@christiantietze.de>
-;; Version: 0.1.1
+;; Version: 0.2.0
 ;; Package-Requires: ((markdown-mode "2.0") (emacs "27.1"))
 ;; Keywords: Markdown
 ;; URL: https://md-babel.org/
@@ -30,15 +30,29 @@
 ;;
 ;; Set `md-babel-path' (until auto-discovery is implemented).
 
-
 ;;; Code:
 
+
+;;;; Configuration
+
+;; TODO: Change to defcustom: 1) lookup function or 2) string path.
 (defvar md-babel-path
   nil
   "Path to your `md-babel' executable.")
 
+(defvar md-babel-response-buffer-name
+  "*md-babel-response*"
+  "Name of buffer to store JSON response from the `md-babel' program.")
+
+
+
+;;;; Data types
+;;;;; cmark's source location and source range
+
 (defun md-babel--source-location-at-point ()
-  "Returns the cmark-compatible source location of point, 1-based."
+  "Returns the cmark-compatible source location of point, 1-based.
+
+A source location is the cons of line and column."
   (let ((line (line-number-at-pos))
         (column (current-column)))
     (cons line (+ 1 column))))
@@ -48,32 +62,8 @@
 (defun md-babel--source-location-column (location)
   (cdr location))
 
-(defvar md-babel--result-buffer-name "*md-babel-result*")
-
-;; swift run md-babel exec --file test.txt --line 7 --column 1
-(defun md-babel--execute-command (file location)
-  "Assembles the shell invocation to execute FILE at LOCATION."
-  (mapconcat
-   (lambda (p) (format "%s" p))
-   (list md-babel-path
-        "exec"
-        "--file" (format "\"%s\"" file)
-        "--line" (md-babel--source-location-line location)
-        "--column" (md-babel--source-location-column location))
-   " "))
-
-(defun md-babel-execute-block-at-point ()
-  (interactive)
-  (when (buffer-modified-p (current-buffer))
-    (error "Save first (to avoid surprises): md-babel operates on files, not buffer contents"))
-  (when-let* ((location (md-babel--source-location-at-point))
-              (file (buffer-file-name))
-              (result (md-babel--execute file location)))
-    (save-excursion
-      (md-babel--mark-range (alist-get 'replacementRange result))
-      (call-interactively #'delete-region)
-      (insert (alist-get 'replacementString result))
-      )))
+
+;;;; Interpret responses
 
 (defun md-babel--mark-range (range-alist)
   "Mark range from RANGE-ALIST in current buffer.
@@ -100,26 +90,71 @@ Uses current buffer if BUFFER is nil."
     (beginning-of-line (alist-get 'line location-alist))
     (move-to-column (- (alist-get 'column location-alist) 1))))
 
-(defun md-babel--execute (file location)
+
+
+;;;; File-based invocation
+
+(defun md-babel--execute-file-command (file location)
+  "Assembles the shell invocation to execute FILE at LOCATION."
+  (mapconcat
+   (lambda (p) (format "%s" p))
+   (list md-babel-path
+         "exec"
+         "--file" (format "\"%s\"" file)
+         "--line" (md-babel--source-location-line location)
+         "--column" (md-babel--source-location-column location))
+   " "))
+
+(defun md-babel--execute-file (file location)
   "Instructs md-babel to execute block at LOCATION in FILE.
 
 Returns the alist form of the JSON response.
 
 The program’s JSON response is inserted into a buffer with the name
-`md-babel--result-buffer-name', which see."
-  (let* ((command (md-babel--execute-command file location))
+`md-babel-response-buffer-name', which see."
+  (let* ((command (md-babel--execute-file-command file location))
          (json-str (with-temp-buffer
                      (shell-command command (current-buffer) nil)
                      (buffer-substring-no-properties (point-min) (point-max))
                      ))
-         (result-buffer (get-buffer-create md-babel--result-buffer-name)))
+         (result-buffer (get-buffer-create md-babel-response-buffer-name)))
     (with-current-buffer result-buffer
       (delete-region (point-min) (point-max))
       (insert json-str))
     (json-parse-string json-str :object-type 'alist)))
 
 
+;;; User-facing commands
+
+
+(defun md-babel--interpret-response (response)
+  (save-excursion
+    (md-babel--mark-range (alist-get 'replacementRange response))
+    (call-interactively #'delete-region)
+    (insert (alist-get 'replacementString response))
+    ))
+
 ;;;###autoload
+(defun md-babel-execute-block-at-point ()
+  "Run block at `point' via the md-babel program and insert result.
+
+The md-babel program produces a JSON response to describe the
+transformation to the document that ought to be performed. The
+response can be inspected in the buffer with name
+`md-babel-response-buffer-name'. Evaluate this after loading the package
+to get there:
+
+    (get-buffer-create md-babel-response-buffer-name)
+
+This command automatically interprets the response.
+"
+  (interactive)
+  (when (buffer-modified-p (current-buffer))
+    (error "Save first (to avoid surprises): md-babel operates on files, not buffer contents"))
+  (when-let* ((location (md-babel--source-location-at-point))
+              (file (buffer-file-name))
+              (response (md-babel--execute-file file location)))
+    (md-babel--interpret-response response)))
 
 (provide 'md-babel)
 
