@@ -35,7 +35,7 @@
 
 ;;;; Configuration
 
-;; TODO: Change to defcustom: 1) lookup function or 2) string path.
+;; TODO: Change to defcustom: https://github.com/md-babel/md-babel.el/issues/1
 (defvar md-babel-path
   nil
   "Path to your `md-babel' executable.")
