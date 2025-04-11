@@ -95,10 +95,11 @@ RANGE-ALIST is expected to be of the form:
   (md-babel--move-point (alist-get 'to range-alist)))
 
 (defun md-babel--interpret-response (response)
-  (save-excursion
-    (md-babel--mark-range (alist-get 'replacementRange response))
-    (call-interactively #'delete-region)
-    (insert (alist-get 'replacementString response))))
+  (md-babel--mark-range (alist-get 'replacementRange response))
+  (call-interactively #'delete-region)
+  (insert (alist-get 'replacementString response))
+  ;; Restore point (or range)
+  (md-babel--mark-range (alist-get 'range response)))
 
 
 ;;;; Buffer content-based invocation
