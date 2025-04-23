@@ -108,7 +108,8 @@ RANGE-ALIST is expected to be of the form:
   "Assembles the invocation process standard input to execute LOCATION."
   (let ((line (number-to-string (md-babel--source-location-line location)))
         (column (number-to-string (md-babel--source-location-column
-                                   location))))
+                                   location)))
+        (md-babel-path (or md-babel-path (error "Set md-babel-path first"))))
     (string-join
      (list md-babel-path
            "exec"
@@ -150,7 +151,8 @@ The program’s JSON response is inserted into a buffer with the name
   "Assembles the shell invocation to execute FILE at LOCATION."
   (let ((line (number-to-string (md-babel--source-location-line location)))
         (column (number-to-string (md-babel--source-location-column
-                                   location))))
+                                   location)))
+        (md-babel-path (or md-babel-path (error "Set md-babel-path first"))))
     (string-join
      (list md-babel-path
            "exec"
