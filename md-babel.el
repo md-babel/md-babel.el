@@ -113,6 +113,7 @@ RANGE-ALIST is expected to be of the form:
     (string-join
      (list md-babel-path
            "exec"
+           "--dir" default-directory
            "--line" (shell-quote-argument line)
            "--column" (shell-quote-argument column))
      " ")))
@@ -156,6 +157,7 @@ The program’s JSON response is inserted into a buffer with the name
     (string-join
      (list md-babel-path
            "exec"
+           "--dir" default-directory
            "--file" (shell-quote-argument file)
            "--line" (shell-quote-argument line)
            "--column" (shell-quote-argument column))
