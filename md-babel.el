@@ -120,6 +120,8 @@ RANGE-ALIST is expected to be of the form:
             "exec"
             (when md-babel-use-default-directory
               (list "--dir" default-directory))
+            (when buffer-file-name
+              (list "--filename" (file-name-base buffer-file-name)))
             "--line" (shell-quote-argument line)
             "--column" (shell-quote-argument column)))
      " ")))
