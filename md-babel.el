@@ -44,6 +44,10 @@
   "*md-babel-response*"
   "Name of buffer to store JSON response from the `md-babel' program.")
 
+;; TODO: A defcustom could make sense like md-babel-use-directory that is nil or a variable reference pointing to default-directory or a string value or a function. https://github.com/md-babel/md-babel.el/issues/3
+(defvar md-babel-use-default-directory
+  t
+  "Whether to pass `default-directory' as '--dir' for relative paths.")
 
 
 ;;;; Data types
@@ -111,11 +115,13 @@ RANGE-ALIST is expected to be of the form:
                                    location)))
         (md-babel-path (or md-babel-path (error "Set md-babel-path first"))))
     (string-join
-     (list md-babel-path
-           "exec"
-           "--dir" default-directory
-           "--line" (shell-quote-argument line)
-           "--column" (shell-quote-argument column))
+     (flatten-list
+      (list md-babel-path
+            "exec"
+            (when md-babel-use-default-directory
+              (list "--dir" default-directory))
+            "--line" (shell-quote-argument line)
+            "--column" (shell-quote-argument column)))
      " ")))
 
 (defun md-babel--execute-buffer (location &optional buffer)
@@ -155,13 +161,15 @@ The program’s JSON response is inserted into a buffer with the name
                                    location)))
         (md-babel-path (or md-babel-path (error "Set md-babel-path first"))))
     (string-join
-     (list md-babel-path
-           "exec"
-           "--dir" default-directory
-           "--file" (shell-quote-argument file)
-           "--line" (shell-quote-argument line)
-           "--column" (shell-quote-argument column))
-     " ")))
+     (flatten-list
+      (list md-babel-path
+            "exec"
+            (when md-babel-use-default-directory
+              (list "--dir" default-directory))
+            "--file" (shell-quote-argument file)
+            "--line" (shell-quote-argument line)
+            "--column" (shell-quote-argument column))
+      " "))))
 
 (defun md-babel--execute-file (file location)
   "Instructs md-babel to execute block at LOCATION in FILE.
